@@ -1,0 +1,144 @@
+// Copyright (c) James McLeod 2025
+// MIT licence
+"use strict";
+
+import { createWriteStream, existsSync } from 'node:fs';
+import { basename } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'path';
+import { Readable } from 'stream';
+import { finished } from 'stream/promises';
+import { launch } from 'puppeteer';
+import commandLineArgs from 'command-line-args';
+import commandLineUsage from 'command-line-usage';
+
+const INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE = 'https://publicreporting.ltchomes.net/en-ca/Search_Selection.aspx';
+
+const OPTION_DEFINITIONS = [
+	{ name: 'help',			alias: 'h',	type: Boolean,	description: 'Display this usage guide' },
+	{ name: 'agentconsole',		alias: 'A',	type: Boolean,	description: `Display user agent console logging` },
+	{ name: 'nonheadless',		alias: 'H',	type: Boolean,	description: 'Run puppeteer in non-Headless mode' },
+	{ name: 'verbose',		alias: 'v',	type: Boolean,	description: 'Show verbose progress' },
+];
+
+const COMMAND_LINE = basename(process.argv[1], '.js') + '[--help] [--verbose]';
+const OPTIONS = commandLineArgs(OPTION_DEFINITIONS, { partial: true });
+if (OPTIONS.help) {
+	const USAGE = commandLineUsage([
+		{
+			header: 'Description',
+			content: `Scrape the list of LTC inspection reports from ${INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE} saving each PDF report`
+		},
+		{
+			header: 'Usage',
+			content: COMMAND_LINE
+		},
+		{
+			header: 'Options',
+			optionList: OPTION_DEFINITIONS
+		}
+	]);
+	console.log(USAGE);
+	process.exit(0);
+}
+
+if (OPTIONS.hasOwnProperty('_unknown')) {
+	console.log(`use: ${COMMAND_LINE}`);
+	process.exit(0);
+}
+
+const AGENT_CONSOLE_DEBUGGING = OPTIONS.hasOwnProperty('agentconsole') ? OPTIONS.agentconsole : false;
+const HEADLESS = OPTIONS.hasOwnProperty('nonheadless') ? !OPTIONS.nonheadless : true;
+const VERBOSE = OPTIONS.hasOwnProperty('verbose') ? OPTIONS.verbose : false;
+const N_RETRIES = 5;
+
+const delay = ms => new Promise(res => setTimeout(res, ms));
+function click(e) { e.click() };
+function getInnerTextAndHref(e) { return [ e.innerText, e.href ]; }
+
+async function gotoPage(page, url) {
+	for (let i = 0; i < N_RETRIES; ++i) {
+		try {
+			await page.goto(url);
+			return true;
+		} catch (err) {
+			if (VERBOSE)
+				console.log(`${err} going to ${url}, retrying`);
+			await delay(1000);
+		}
+	}
+	return false;
+}
+
+async function getDocument(path, title, uri) {
+	if(VERBOSE)
+		console.log(`retrieving ${path}/${title}.pdf (${uri})`);
+
+	// From https://stackoverflow.com/questions/37614649/how-can-i-download-and-save-a-file-using-the-fetch-api-node-js
+	const res = await fetch(uri);
+	async function downloadFile(uri, path, title) {
+		const res = await fetch(uri);
+		const destination = resolve(path, `${title}.pdf`);
+		const fs = createWriteStream(destination, { flags: 'w' });
+		await finished(Readable.fromWeb(res.body).pipe(fs));
+	};
+
+	await downloadFile(uri, path, title);
+}
+
+async function processLTCHomePage(ltcName, ltcUrl, browser) {
+	if (VERBOSE)
+		console.log(`Retrieving reports for ${ltcName} (${ltcUrl})`);
+
+	const page = await browser.newPage();
+	await gotoPage(page, ltcUrl);
+	await delay(1000);
+
+	const inspectionsLinkElement = await page.$('#ctl00_ContentPlaceHolder1_aInspection'); 
+	await inspectionsLinkElement.evaluate(click);
+	await delay(1000);
+
+	const docElements = await page.$$('div.divInspectionFileDataCol>a');
+
+	if (!existsSync(ltcName))
+		mkdirSync(ltcName);
+	else if (VERBOSE)
+		console.log(`Directory ${ltcName} already exists`);
+
+	for (const docElement of docElements) {
+		const [ text, href ] = await docElement.evaluate(getInnerTextAndHref);	
+		const fn = `${ltcName}/{$text}.pdf`;
+		if (!existsSync(fn))
+			await getDocument(ltcName, text, href);
+		else if (VERBOSE)
+			console.log(`Skipping already retrieved file ${fn}`);
+	}
+
+	await page.close();
+}
+
+async function run() {
+	const browser = await launch( { headless: HEADLESS, args: ['--no-sandbox', '--disable-setuid-sandbox'], timeout: 100_000} );
+	const page = await browser.newPage();
+	if (AGENT_CONSOLE_DEBUGGING)
+		page.on('console', msg => console.log('PAGE LOG', msg.text()));
+
+	if (VERBOSE)
+		console.log(`loading ${INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE}`);
+
+	// Navigate to main inspection reports page
+	await gotoPage(page, INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE);
+
+	const ltcHomesElements = await page.$$('#ctl00_ContentPlaceHolder1_rsResults>ol>li>a');
+	if (VERBOSE)
+		console.log(`found ${ltcHomesElements.length} homes`);
+
+	for (const ltcHomeElement of ltcHomesElements) {
+		const [ text, href ] = await ltcHomeElement.evaluate(getInnerTextAndHref);	
+		await processLTCHomePage(text, href, browser);
+	}
+
+	await page.close();
+}
+
+await run();
