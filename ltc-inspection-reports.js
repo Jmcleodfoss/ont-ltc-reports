@@ -107,7 +107,7 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 
 	for (const docElement of docElements) {
 		const [ text, href ] = await docElement.evaluate(getInnerTextAndHref);	
-		const fn = `${ltcName}/{$text}.pdf`;
+		const fn = `${ltcName}/${text}.pdf`;
 		if (!existsSync(fn))
 			await getDocument(ltcName, text, href);
 		else if (VERBOSE)
