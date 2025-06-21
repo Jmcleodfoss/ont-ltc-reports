@@ -54,6 +54,10 @@ const HEADLESS = OPTIONS.hasOwnProperty('nonheadless') ? !OPTIONS.nonheadless : 
 const VERBOSE = OPTIONS.hasOwnProperty('verbose') ? OPTIONS.verbose : false;
 const N_RETRIES = 5;
 
+let nRetrieved = 0;
+let lastDocName = '';
+let docInstance = 1;
+
 const delay = ms => new Promise(res => setTimeout(res, ms));
 function click(e) { e.click() };
 function getInnerTextAndHref(e) { return [ e.innerText, e.href ]; }
@@ -86,6 +90,7 @@ async function getDocument(path, title, uri) {
 	};
 
 	await downloadFile(uri, path, title);
+	++nRetrieved;
 }
 
 async function processLTCHomePage(ltcName, ltcUrl, browser) {
@@ -108,8 +113,16 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 		console.log(`Directory ${ltcName} already exists`);
 
 	for (const docElement of docElements) {
-		const [ text, href ] = await docElement.evaluate(getInnerTextAndHref);	
-		const fn = `${ltcName}/${text}.pdf`;
+		const [ text, href ] = await docElement.evaluate(getInnerTextAndHref)
+		if (text == lastDocName)
+			++docInstance;
+		else
+			docInstance = 0
+		const instanceSuffix = docInstance == 0 ? '' : `-${docInstance}`;
+		lastDocName = text;
+
+		const fn = `${ltcName}/${text}${instanceSuffix}.pdf`;
+		lastDocName = fn;
 		if (!existsSync(fn))
 			await getDocument(ltcName, text, href);
 		else if (VERBOSE)
