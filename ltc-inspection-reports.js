@@ -62,6 +62,8 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 function click(e) { e.click() };
 function getInnerTextAndHref(e) { return [ e.innerText, e.href ]; }
 
+let records = [];
+
 async function gotoPage(page, url) {
 	for (let i = 0; i < N_RETRIES; ++i) {
 		try {
@@ -127,6 +129,7 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 			await getDocument(ltcName, text, href);
 		else if (VERBOSE)
 			console.log(`Skipping already retrieved file ${fn}`);
+		records.push({uri: href, home: ltcName, title: text, instance: docInstance });
 	}
 
 	await page.close();
@@ -169,7 +172,10 @@ async function run() {
 		}
 	}
 
+	console.log(`retrieved ${nRetrieved} reports`);
 	await page.close();
+
+	console.log(records);
 }
 
 await run();
