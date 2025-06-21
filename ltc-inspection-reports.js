@@ -192,8 +192,7 @@ async function run() {
 
 	console.log(`retrieved ${nRetrieved} reports`);
 	await page.close();
-
-	console.log(records);
+	await browser.close();
 }
 
 await run();
