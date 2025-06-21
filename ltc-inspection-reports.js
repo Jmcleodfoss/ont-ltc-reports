@@ -2,8 +2,7 @@
 // MIT licence
 "use strict";
 
-import { createWriteStream, existsSync } from 'node:fs';
-import { appendFile, closeSync, openSync, writeSync } from 'node:fs';
+import { appendFile, closeSync, createWriteStream, existsSync, openSync, writeSync } from 'node:fs';
 import { basename } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'path';
