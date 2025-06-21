@@ -103,7 +103,7 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 	await gotoPage(page, ltcUrl);
 	await delay(1000);
 
-	const inspectionsLinkElement = await page.$('#ctl00_ContentPlaceHolder1_aInspection'); 
+	const inspectionsLinkElement = await page.$('#ctl00_ContentPlaceHolder1_aInspection');
 	await inspectionsLinkElement.evaluate(click);
 	await delay(1000);
 
