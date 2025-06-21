@@ -53,7 +53,6 @@ const FIRST_HOME = OPTIONS.hasOwnProperty('startat') ? OPTIONS.startat : '';
 const AGENT_CONSOLE_DEBUGGING = OPTIONS.hasOwnProperty('agentconsole') ? OPTIONS.agentconsole : false;
 const HEADLESS = OPTIONS.hasOwnProperty('nonheadless') ? !OPTIONS.nonheadless : true;
 const VERBOSE = OPTIONS.hasOwnProperty('verbose') ? OPTIONS.verbose : false;
-const JSON_INDENTATION = OPTIONS.hasOwnProperty('pretty') ? 2 : 0;
 const RECORDS_LIST_FILENAME = 'ltc-records.json';
 const N_RETRIES = 5;
 
@@ -148,7 +147,7 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 			console.log(`Skipping already retrieved file ${fn}`);
 		const entry = {uri: href, home: ltcName, title: text, instance: docInstance };
 		records.push(entry);
-		await appendFile(recordList, (nRetrieved > 0 ? ',' : '') + JSON.stringify(entry, null, JSON_INDENTATION) + "\n", (err) => { ioError('appending record to records list', err) });
+		await appendFile(recordList, (nRetrieved > 0 ? ',' : '') + JSON.stringify(entry, null, 2) + "\n", (err) => { ioError('appending record to records list', err) });
 	}
 
 	await page.close();
