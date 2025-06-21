@@ -16,6 +16,7 @@ const INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE = 'https://publicreporting.ltchomes
 
 const OPTION_DEFINITIONS = [
 	{ name: 'help',			alias: 'h',	type: Boolean,	description: 'Display this usage guide' },
+	{ name: 'startat',		alias: 's',	type: String,	description: 'Start with this home' },
 	{ name: 'agentconsole',		alias: 'A',	type: Boolean,	description: `Display user agent console logging` },
 	{ name: 'nonheadless',		alias: 'H',	type: Boolean,	description: 'Run puppeteer in non-Headless mode' },
 	{ name: 'verbose',		alias: 'v',	type: Boolean,	description: 'Show verbose progress' },
@@ -47,6 +48,7 @@ if (OPTIONS.hasOwnProperty('_unknown')) {
 	process.exit(0);
 }
 
+const FIRST_HOME = OPTIONS.hasOwnProperty('startat') ? OPTIONS.startat : '';
 const AGENT_CONSOLE_DEBUGGING = OPTIONS.hasOwnProperty('agentconsole') ? OPTIONS.agentconsole : false;
 const HEADLESS = OPTIONS.hasOwnProperty('nonheadless') ? !OPTIONS.nonheadless : true;
 const VERBOSE = OPTIONS.hasOwnProperty('verbose') ? OPTIONS.verbose : false;
@@ -133,9 +135,13 @@ async function run() {
 	if (VERBOSE)
 		console.log(`found ${ltcHomesElements.length} homes`);
 
+	let firstFound = false;
 	for (const ltcHomeElement of ltcHomesElements) {
-		const [ text, href ] = await ltcHomeElement.evaluate(getInnerTextAndHref);	
-		await processLTCHomePage(text, href, browser);
+		const [ text, href ] = await ltcHomeElement.evaluate(getInnerTextAndHref);
+		if (FIRST_HOME.length === 0 || (FIRST_HOME == text || firstFound)) {
+			firstFound = FIRST_HOME.length > 0;
+			await processLTCHomePage(text, href, browser);
+		}
 	}
 
 	await page.close();
