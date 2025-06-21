@@ -129,6 +129,9 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 
 	const docElements = await page.$$('div.divInspectionFileDataCol>a');
 
+	ltcName = ltcName.replaceAll('/', '-');
+	ltcName = ltcName.replaceAll('"', '');
+	ltcName = ltcName.replaceAll(':', '-');
 	if (!existsSync(ltcName))
 		mkdirSync(ltcName);
 	else if (VERBOSE)
