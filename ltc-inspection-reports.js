@@ -153,7 +153,19 @@ async function run() {
 		const [ text, href ] = await ltcHomeElement.evaluate(getInnerTextAndHref);
 		if (FIRST_HOME.length === 0 || (FIRST_HOME == text || firstFound)) {
 			firstFound = FIRST_HOME.length > 0;
-			await processLTCHomePage(text, href, browser);
+			for (let i = 0; i < N_RETRIES; ++i) {
+				try {
+					await processLTCHomePage(text, href, browser);
+					i = N_RETRIES;
+				} catch (err) {
+					console.log(`Exception for ${text} (${href}`);
+					console.log(err);
+					delay(1000);
+					++i;
+					if (i === N_RETRIES)
+						console.log(`Failed to retrieve information for ${text} after ${i} tries`);
+				}
+			}
 		}
 	}
 
