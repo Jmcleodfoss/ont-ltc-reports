@@ -3,6 +3,7 @@
 "use strict";
 
 import { createWriteStream, existsSync } from 'node:fs';
+import { appendFile, closeSync, openSync, writeSync } from 'node:fs';
 import { basename } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'path';
@@ -52,17 +53,25 @@ const FIRST_HOME = OPTIONS.hasOwnProperty('startat') ? OPTIONS.startat : '';
 const AGENT_CONSOLE_DEBUGGING = OPTIONS.hasOwnProperty('agentconsole') ? OPTIONS.agentconsole : false;
 const HEADLESS = OPTIONS.hasOwnProperty('nonheadless') ? !OPTIONS.nonheadless : true;
 const VERBOSE = OPTIONS.hasOwnProperty('verbose') ? OPTIONS.verbose : false;
+const JSON_INDENTATION = OPTIONS.hasOwnProperty('pretty') ? 2 : 0;
+const RECORDS_LIST_FILENAME = 'ltc-records.json';
 const N_RETRIES = 5;
 
 let nRetrieved = 0;
-let lastDocName = '';
-let docInstance = 1;
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
 function click(e) { e.click() };
 function getInnerTextAndHref(e) { return [ e.innerText, e.href ]; }
 
 let records = [];
+
+function ioError(description, error) {
+	if (error) {
+		console.log(`IO error: ${description}`);
+		console.log(error);
+		throw error;
+	}
+}
 
 async function gotoPage(page, url) {
 	for (let i = 0; i < N_RETRIES; ++i) {
@@ -78,21 +87,33 @@ async function gotoPage(page, url) {
 	return false;
 }
 
+const recordList = openSync(RECORDS_LIST_FILENAME, 'w');
+writeSync(recordList, '[', (err) => { ioError('writing first character of records list', err) });
+
 async function getDocument(path, title, uri) {
 	if(VERBOSE)
-		console.log(`retrieving ${path}/${title}.pdf (${uri})`);
+		console.log(`retrieving ${path}/${title} (${uri})`);
 
 	// From https://stackoverflow.com/questions/37614649/how-can-i-download-and-save-a-file-using-the-fetch-api-node-js
 	const res = await fetch(uri);
 	async function downloadFile(uri, path, title) {
 		const res = await fetch(uri);
-		const destination = resolve(path, `${title}.pdf`);
+		const destination = resolve(path, `${title}`);
 		const fs = createWriteStream(destination, { flags: 'w' });
 		await finished(Readable.fromWeb(res.body).pipe(fs));
 	};
 
 	await downloadFile(uri, path, title);
 	++nRetrieved;
+}
+
+function getDocumentInstance(ltcName, docTitle) {
+	let instance = 0;
+	for (const i in records) {
+		if (records[i].home == ltcName && records[i].title == docTitle)
+			++instance;
+	}
+	return instance
 }
 
 async function processLTCHomePage(ltcName, ltcUrl, browser) {
@@ -116,20 +137,18 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 
 	for (const docElement of docElements) {
 		const [ text, href ] = await docElement.evaluate(getInnerTextAndHref)
-		if (text == lastDocName)
-			++docInstance;
-		else
-			docInstance = 0
+		const docInstance = getDocumentInstance(ltcName, text);
 		const instanceSuffix = docInstance == 0 ? '' : `-${docInstance}`;
-		lastDocName = text;
 
-		const fn = `${ltcName}/${text}${instanceSuffix}.pdf`;
-		lastDocName = fn;
-		if (!existsSync(fn))
-			await getDocument(ltcName, text, href);
+		const fn = `${text}${instanceSuffix}.pdf`
+		const path_and_fn = `${ltcName}/${fn}`;
+		if (!existsSync(path_and_fn))
+			await getDocument(ltcName, fn, href);
 		else if (VERBOSE)
 			console.log(`Skipping already retrieved file ${fn}`);
-		records.push({uri: href, home: ltcName, title: text, instance: docInstance });
+		const entry = {uri: href, home: ltcName, title: text, instance: docInstance };
+		records.push(entry);
+		await appendFile(recordList, (nRetrieved > 0 ? ',' : '') + JSON.stringify(entry, null, JSON_INDENTATION) + "\n", (err) => { ioError('appending record to records list', err) });
 	}
 
 	await page.close();
@@ -179,3 +198,6 @@ async function run() {
 }
 
 await run();
+await appendFile(recordList, ']', (err) => { ioError('writing final character of records list', err) });
+delay(100);
+closeSync(recordList, (err) => { ioError('closing records list', err) });
