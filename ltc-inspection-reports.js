@@ -13,9 +13,11 @@ import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
 
 const INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE = 'https://publicreporting.ltchomes.net/en-ca/Search_Selection.aspx';
+const DEFAULT_REPORT_DIR = "reports";
 
 const OPTION_DEFINITIONS = [
 	{ name: 'help',			alias: 'h',	type: Boolean,	description: 'Display this usage guide' },
+	{ name: 'repdir',		alias: 'r',	type: String,	description: `Use given output directory (default ${DEFAULT_REPORT_DIR}` },
 	{ name: 'startat',		alias: 's',	type: String,	description: 'Start with this home (useful if script fails for any reason - redo the current page)' },
 	{ name: 'verbose',		alias: 'v',	type: Boolean,	description: 'Show verbose progress' },
 ];
@@ -47,6 +49,7 @@ if (OPTIONS.hasOwnProperty('_unknown')) {
 }
 
 const FIRST_HOME = OPTIONS.hasOwnProperty('startat') ? OPTIONS.startat : '';
+const REPORT_DIR = OPTIONS.hasOwnProperty('repdir') ? OPTIONS.repdir : DEFAULT_REPORT_DIR;
 const VERBOSE = OPTIONS.hasOwnProperty('verbose') ? OPTIONS.verbose : false;
 const RECORDS_LIST_FILENAME = 'ltc-records.json';
 const N_RETRIES = 5;
@@ -92,7 +95,7 @@ async function getDocument(path, title, uri) {
 	const res = await fetch(uri);
 	async function downloadFile(uri, path, title) {
 		const res = await fetch(uri);
-		const destination = resolve(path, `${title}`);
+		const destination = resolve(path, title);
 		const fs = createWriteStream(destination, { flags: 'w' });
 		await finished(Readable.fromWeb(res.body).pipe(fs));
 	};
@@ -127,10 +130,11 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 	ltcName = ltcName.replaceAll('/', '-');
 	ltcName = ltcName.replaceAll('"', '');
 	ltcName = ltcName.replaceAll(':', '-');
-	if (!existsSync(ltcName))
-		mkdirSync(ltcName);
+	const ltcDir = `${REPORT_DIR}/${ltcName}`;
+	if (!existsSync(ltcDir))
+		mkdirSync(ltcDir);
 	else if (VERBOSE)
-		console.log(`Directory ${ltcName} already exists`);
+		console.log(`Directory ${ltcDir} already exists`);
 
 	for (const docElement of docElements) {
 		const [ text, href ] = await docElement.evaluate(getInnerTextAndHref)
@@ -138,9 +142,9 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 		const instanceSuffix = docInstance == 0 ? '' : `-${docInstance}`;
 
 		const fn = `${text}${instanceSuffix}.pdf`
-		const path_and_fn = `${ltcName}/${fn}`;
+		const path_and_fn = `${ltcDir}/${fn}`;
 		if (!existsSync(path_and_fn))
-			await getDocument(ltcName, fn, href);
+			await getDocument(ltcDir, fn, href);
 		else if (VERBOSE)
 			console.log(`Skipping already retrieved file ${fn}`);
 		const entry = {uri: href, home: ltcName, title: text, instance: docInstance };
@@ -159,6 +163,13 @@ async function run() {
 
 	if (VERBOSE)
 		console.log(`loading ${INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE}`);
+
+	if (VERBOSE)
+		console.log(`Reports will be saved to ${REPORT_DIR}`);
+	if (!existsSync(REPORT_DIR))
+		mkdirSync(REPORT_DIR);
+	else if (VERBOSE)
+		console.log(`Directory ${REPORT_DIR} already exists`);
 
 	// Navigate to main inspection reports page
 	await gotoPage(page, INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE);
