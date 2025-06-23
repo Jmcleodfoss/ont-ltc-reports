@@ -16,13 +16,11 @@ const INSPECTION_REPORTS_SEARCH_BY_NAME_PAGE = 'https://publicreporting.ltchomes
 
 const OPTION_DEFINITIONS = [
 	{ name: 'help',			alias: 'h',	type: Boolean,	description: 'Display this usage guide' },
-	{ name: 'startat',		alias: 's',	type: String,	description: 'Start with this home' },
-	{ name: 'agentconsole',		alias: 'A',	type: Boolean,	description: `Display user agent console logging` },
-	{ name: 'nonheadless',		alias: 'H',	type: Boolean,	description: 'Run puppeteer in non-Headless mode' },
+	{ name: 'startat',		alias: 's',	type: String,	description: 'Start with this home (useful if script fails for any reason - redo the current page)' },
 	{ name: 'verbose',		alias: 'v',	type: Boolean,	description: 'Show verbose progress' },
 ];
 
-const COMMAND_LINE = basename(process.argv[1], '.js') + '[--help] [--verbose]';
+const COMMAND_LINE = basename(process.argv[1], '.js') + '[--help] [--startat="HOME NAME (all upper case)" [--verbose]';
 const OPTIONS = commandLineArgs(OPTION_DEFINITIONS, { partial: true });
 if (OPTIONS.help) {
 	const USAGE = commandLineUsage([
@@ -49,8 +47,6 @@ if (OPTIONS.hasOwnProperty('_unknown')) {
 }
 
 const FIRST_HOME = OPTIONS.hasOwnProperty('startat') ? OPTIONS.startat : '';
-const AGENT_CONSOLE_DEBUGGING = OPTIONS.hasOwnProperty('agentconsole') ? OPTIONS.agentconsole : false;
-const HEADLESS = OPTIONS.hasOwnProperty('nonheadless') ? !OPTIONS.nonheadless : true;
 const VERBOSE = OPTIONS.hasOwnProperty('verbose') ? OPTIONS.verbose : false;
 const RECORDS_LIST_FILENAME = 'ltc-records.json';
 const N_RETRIES = 5;
@@ -156,9 +152,9 @@ async function processLTCHomePage(ltcName, ltcUrl, browser) {
 }
 
 async function run() {
-	const browser = await launch( { headless: HEADLESS, args: ['--no-sandbox', '--disable-setuid-sandbox'], timeout: 100_000} );
+	const browser = await launch( { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'], timeout: 100_000} );
 	const page = await browser.newPage();
-	if (AGENT_CONSOLE_DEBUGGING)
+	if (VERBOSE)
 		page.on('console', msg => console.log('PAGE LOG', msg.text()));
 
 	if (VERBOSE)
@@ -172,6 +168,7 @@ async function run() {
 		console.log(`found ${ltcHomesElements.length} homes`);
 
 	let firstFound = false;
+	let complete = false;
 	for (const ltcHomeElement of ltcHomesElements) {
 		const [ text, href ] = await ltcHomeElement.evaluate(getInnerTextAndHref);
 		if (FIRST_HOME.length === 0 || (FIRST_HOME == text || firstFound)) {
@@ -190,6 +187,8 @@ async function run() {
 				}
 			}
 		}
+		if (complete)
+			break;
 	}
 
 	console.log(`retrieved ${nRetrieved} reports`);
