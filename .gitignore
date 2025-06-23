@@ -134,3 +134,12 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Local temp and convenience files
+*.csv
+*.txt
+*.xlsx
+reports/
+zipped-reports/
+ltc-records.json
+.gitconfig
